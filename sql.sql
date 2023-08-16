@@ -1,6 +1,6 @@
 --POPULATE TABLES WITH IDS TO DELETE
 
-create table uhs_non_vendor(vendornumber varchar, covid bigint, name_id bigint,  secondaryrepresentative_id bigint,  primaryrepresentative_id bigint,  mailingaddress_id bigint,  designatedaddress_id bigint, covgid bigint, monitorservice_id bigint);
+create table uhs_non_vendor(vendornumber varchar, covid bigint, name_id bigint,  secondaryrepresentative_id bigint,  primaryrepresentative_id bigint, mailingaddress_id bigint,  designatedaddress_id bigint, covgid bigint, covgtrashed boolean, monitorservice_id bigint);
 
 COPY uhs_non_vendor(vendornumber)
 FROM '/Users/bgao/Downloads/VP_add_update_2023-08-14.csv'
@@ -23,11 +23,16 @@ and cov.createtime < '2023-08-16'
 and cov.trashed
  and cov.client_id = 1509 --UHS
 
+update uhs_non_vendor unv set
+ covgtrashed = covg.trashed
+ from clientownedvendorgroup covg
+ where unv.covgid = covg.id;
+--TODO spot check values
+
 create table uhs_non_vendor_voc(vocid bigint);
 
 insert into uhs_non_vendor_voc(vocid)
 select distinct vendorownercollection_id from clientownedvendorgroup where id in (select covgid from uhs_non_vendor) and vendorownercollection_id is not null;
-
 
 create table uhs_delete_ms(msid bigint);
 
