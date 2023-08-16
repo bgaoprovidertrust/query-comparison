@@ -20,8 +20,7 @@ from clientownedvendor cov
 where cov.vendornumber = anv.vendornumber
 and cov.createtime > '2023-08-14'
 and cov.createtime < '2023-08-16'
-and cov.trashed
- and cov.client_id = 1509 --UHS
+ and cov.client_id = 1509; --UHS
 
 update uhs_non_vendor unv set
  covgtodelete = TRUE
@@ -29,7 +28,8 @@ update uhs_non_vendor unv set
  where unv.covgid = covg.id
 and covg.trashed
 and createtime > '2023-08-14'
-and createtime < '2023-08-16';
+and createtime < '2023-08-16'
+and cov.client_id = 1509;
 --TODO spot check values to make sure covgtodelete is set like expected
 
 create table uhs_non_vendor_voc(vocid bigint);
