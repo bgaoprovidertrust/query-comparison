@@ -2,10 +2,13 @@
 
 create table uhs_non_vendor(vendornumber varchar, covid bigint, name_id bigint,  secondaryrepresentative_id bigint,  primaryrepresentative_id bigint,  mailingaddress_id bigint,  designatedaddress_id bigint, covgid bigint, monitorservice_id bigint);
 
-insert into uhs_non_vendor(vendornumber, covid)
-values;
+COPY uhs_non_vendor(vendornumber)
+FROM '/Users/bgao/Downloads/VP_add_update_2023-08-14.csv'
+DELIMITER ','
+CSV HEADER;
 
 update uhs_non_vendor anv set 
+covid = cov.id,
 name_id = cov.name_id,
 secondaryrepresentative_id = cov.secondaryrepresentative_id,
 primaryrepresentative_id = cov.primaryrepresentative_id,
@@ -14,7 +17,12 @@ designatedaddress_id = cov.designatedaddress_id,
 covgid = cov.vendorgroup_id,
 monitorservice_id = cov.monitorservice_id
 from clientownedvendor cov
-where cov.id = anv.covid;
+where cov.vendornumber = anv.vendornumber
+and cov.createtime > '2023-08-14'
+and cov.createtime < '2023-08-16'
+and cov.trashed
+ and cov.client_id = 1509 --UHS
+
 create table uhs_non_vendor_voc(vocid bigint);
 
 insert into uhs_non_vendor_voc(vocid)
