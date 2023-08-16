@@ -1,6 +1,6 @@
 --POPULATE TABLES WITH IDS TO DELETE
 
-create table uhs_non_vendor(vendornumber varchar, covid bigint, name_id bigint,  secondaryrepresentative_id bigint,  primaryrepresentative_id bigint, mailingaddress_id bigint,  designatedaddress_id bigint, covgid bigint, covgtrashed boolean, monitorservice_id bigint);
+create table uhs_non_vendor(vendornumber varchar, covid bigint, name_id bigint,  secondaryrepresentative_id bigint,  primaryrepresentative_id bigint, mailingaddress_id bigint,  designatedaddress_id bigint, covgid bigint, covgtodelete boolean, monitorservice_id bigint);
 
 COPY uhs_non_vendor(vendornumber)
 FROM '/Users/bgao/Downloads/VP_add_update_2023-08-14.csv'
@@ -24,9 +24,11 @@ and cov.trashed
  and cov.client_id = 1509 --UHS
 
 update uhs_non_vendor unv set
- covgtrashed = covg.trashed
+ covgtodelete = covg.trashed
  from clientownedvendorgroup covg
- where unv.covgid = covg.id;
+ where unv.covgid = covg.id
+and createtime > '2023-08-14'
+and createtime < '2023-08-16';
 --TODO spot check values
 
 create table uhs_non_vendor_voc(vocid bigint);
@@ -133,6 +135,7 @@ delete from monitoritem where monitorobject_id in (select id from monitorobject 
 delete from monitorobject where monitorsubject_id in (select subid from uhs_non_vendor_sub);
 
 delete from monitoredsubject2 where id in (select subid from uhs_non_vendor_sub);
+
 --COV
 delete from monitoredsubject2 where vendor_id in (select covid from uhs_non_vendor);
 
@@ -161,15 +164,11 @@ delete from address_region where id in (select designatedaddress_id from uhs_non
 delete from address where id in (select designatedaddress_id from uhs_non_vendor);
 
 --COVG And VO
-update vendorconnection set vendorgroup_id = null where id in (select vcid from uhs_non_vendor_vc);
+delete from monitoredsubject2 where vendorgroup_id in (select covgid from uhs_non_vendor where covgtodelete);
 
-delete from monitoredsubject2 where vendorgroup_id in (select covgid from uhs_non_vendor);
+delete from clientownedvendorgroup_w9 where clientownedvendorgroup_id in (select covgid from uhs_non_vendor where covgtodelete);
 
-delete from vendorgroupenrollment where vendorgroup_id in (select covgid from uhs_non_vendor);
-
-delete from clientownedvendorgroup_w9 where clientownedvendorgroup_id in (select covgid from uhs_non_vendor);
-
-delete from clientownedvendorgroup where id in (select covgid from uhs_non_vendor);
+delete from clientownedvendorgroup where id in (select covgid from uhs_non_vendor where covgtodelete);
 
 delete from monitoredsubject2 where vendorowner_id in (select id from vendorowner where vendorownercollection_id in (select vocid from uhs_non_vendor_voc));
 
