@@ -24,37 +24,48 @@ and cov.trashed
  and cov.client_id = 1509 --UHS
 
 update uhs_non_vendor unv set
- covgtodelete = covg.trashed
+ covgtodelete = TRUE
  from clientownedvendorgroup covg
  where unv.covgid = covg.id
+and covg.trashed
 and createtime > '2023-08-14'
 and createtime < '2023-08-16';
---TODO spot check values
+--TODO spot check values to make sure covgtodelete is set like expected
 
 create table uhs_non_vendor_voc(vocid bigint);
 
 insert into uhs_non_vendor_voc(vocid)
-select distinct vendorownercollection_id from clientownedvendorgroup where id in (select covgid from uhs_non_vendor) and vendorownercollection_id is not null;
+select distinct vendorownercollection_id from clientownedvendorgroup where id in (select covgid from uhs_non_vendor where covgtodelete) and vendorownercollection_id is not null;
+--we expect this to be 0
 
 create table uhs_delete_ms(msid bigint);
 
 insert into uhs_delete_ms(msid)
-(select monitorservice_id from uhs_non_vendor
+(select monitorservice_id from uhs_non_vendor where covgtodelete
 union
-select id from monitorservice2 where monitorsubject_id in (select id from monitoredsubject2 where vendorowner_id in (select id from vendorowner where vendorownercollection_id in (select vocid from uhs_non_vendor_voc))));
+select id from monitorservice2 where monitorsubject_id in 
+    (select id from monitoredsubject2 where vendorowner_id in 
+        (select id from vendorowner where vendorownercollection_id in 
+            (select vocid from uhs_non_vendor_voc))));
 
 create table uhs_non_vendor_imrs(imrid bigint);
 
-with recursive imr_down_chain(startingid, id, previousimr_id ) as (
-    select id as startingid, id, previousimr_id from intermediatemonitorrecord where id in (select intermediatemonitorrecord_id from monitorrecord where monitorservice_id in (select monitorservice_id from uhs_non_vendor))
+insert into uhs_non_vendor_imrs(imrid)
+select id from intermediatemonitorrecord where monitoritem_id in 
+    (select id from monitoritem where monitorservice_id in 
+        (select msid from uhs_delete_ms));
+
+with recursive imr_down_chain(startingid, id, previousimr_id ) as 
+(
+    select id as startingid, id, previousimr_id from intermediatemonitorrecord where id in 
+        (select intermediatemonitorrecord_id from monitorrecord where monitorservice_id in 
+            (select monitorservice_id from uhs_delete_ms))
     union
     select down.startingid, imr.id, imr.previousimr_id from intermediatemonitorrecord imr inner join imr_down_chain down on down.previousimr_id = imr.id
 )
 insert into uhs_non_vendor_imrs(imrid)
-select distinct id from imr_down_chain where previousimr_id is null;
-
-insert into uhs_non_vendor_imrs(imrid)
-select id from intermediatemonitorrecord where monitoritem_id in (select id from monitoritem where monitorservice_id in (select msid from uhs_delete_ms)) and id not in (select imrid from uhs_non_vendor_imrs);
+select distinct id from imr_down_chain where previousimr_id is null and id not in (select imrid from uhs_non_vendor_imrs);
+--We hope that this is 0
 
 with recursive imr_up_chain as (
     select imrid as startingid, imrid as id, null::bigint as previousimr_id from uhs_non_vendor_imrs
@@ -62,7 +73,10 @@ with recursive imr_up_chain as (
     select up.startingid, imr2.id, imr2.previousimr_id from intermediatemonitorrecord imr2 inner join imr_up_chain up on up.id = imr2.previousimr_id
 )
 insert into uhs_non_vendor_imrs(imrid)
-select id from imr_up_chain where previousimr_id is not null;
+select id from imr_up_chain where previousimr_id is not null and id not in (select imrid from uhs_non_vendor_imrs);
+--We hope that this is 0
+
+
 
 create table uhs_non_vendor_sub(subid bigint);
 
@@ -86,11 +100,6 @@ select distinct id from sub_down_chain where parent_id is not null;
 insert into uhs_non_vendor_sub(subid)
 select distinct id from monitoredsubject2 where vendorowner_id in (select id from vendorowner where vendorownercollection_id in (select vocid from uhs_non_vendor_voc)) and id not in (select subid from uhs_non_vendor_sub);
 
---vendor connections
-create table uhs_non_vendor_vc(vcid bigint);
-
-insert into uhs_non_vendor_vc(vcid)
-select id from vendorconnection where vendorgroup_id in (select covgid from uhs_non_vendor);
 --IMRs and MRs
 delete from monitorrecordnote where monitorrecord_id in (select id from monitorrecord where monitorservice_id in (select msid from uhs_delete_ms));
 
@@ -104,6 +113,7 @@ delete from intermediatemonitorrecord where id in (select imrid from uhs_non_ven
 update clientownedvendor set monitorservice_id = null where id in (select covid from uhs_non_vendor);
 
 delete from vendorowner_monitorservice2 where monitorservice_id in (select msid from uhs_delete_ms);
+--think is 0
 
 delete from monitorservicestatuslog2_users where monitorservicestatuslog2_id in (select id from monitorservicestatuslog2 where service_id in (select msid from uhs_delete_ms));
 
@@ -138,6 +148,7 @@ delete from monitoredsubject2 where id in (select subid from uhs_non_vendor_sub)
 
 --COV
 delete from monitoredsubject2 where vendor_id in (select covid from uhs_non_vendor);
+--if this does not return 0, we should be worried about the previous monitor subject queries
 
 delete from clientownedvendorevent where clientownedvendor_id in (select covid from uhs_non_vendor);
 
@@ -148,6 +159,12 @@ delete from clientownedvendorlabel_assignments where clientownedvendor_id in (se
 delete from clientownedvendor_clientvendorconnection where clientownedvendor_id in (select covid from uhs_non_vendor);
 
 delete from lawsonvendor where clientownedvendor_id in (select covid from uhs_non_vendor);
+
+delete from CovMovedGroupsAuditEvent where movedcov in (select covid from uhs_non_vendor);
+
+delete from MonitoredCovActivePeriod where clientownedvendor_id in (select covid from uhs_non_vendor);
+
+delete from PtidSyncData where clientownedvendor_id in (select covid from uhs_non_vendor);
 
 delete from clientownedvendor cov where id in (select covid from uhs_non_vendor);
 
@@ -163,10 +180,20 @@ delete from address_region where id in (select designatedaddress_id from uhs_non
 
 delete from address where id in (select designatedaddress_id from uhs_non_vendor);
 
+
 --COVG And VO
+delete from enrollmentmetadata where clientownedvendorgroup_id in (select covg from uhs_non_vendor where covgtodelete);
+
 delete from monitoredsubject2 where vendorgroup_id in (select covgid from uhs_non_vendor where covgtodelete);
 
 delete from clientownedvendorgroup_w9 where clientownedvendorgroup_id in (select covgid from uhs_non_vendor where covgtodelete);
+
+delete from compliancestatusevent_newnoncompliancereasons where compliancestatusevent_id in (select id from ComplianceStatusEvent where vendorgroup_id in (select covgid from uhs_non_vendor where covgtodelete));
+delete from compliancestatusevent_oldnoncompliancereasons where compliancestatusevent_id in (select id from ComplianceStatusEvent where vendorgroup_id in (select covgid from uhs_non_vendor where covgtodelete));
+delete from ComplianceStatusEvent where vendorgroup_id in (select covgid from uhs_non_vendor where covgtodelete);
+
+delete from noncompliancereasons where clientownedvendorgroup_id in (select covgid from uhs_non_vendor where covgtodelete);
+
 
 delete from clientownedvendorgroup where id in (select covgid from uhs_non_vendor where covgtodelete);
 
@@ -180,9 +207,10 @@ delete from vendorowner_monitorservice2 where vendorowner_id in (select id from 
 --update vendor set vendorownercollection_id = null where vendorownercollection_id in (select vocid from uhs_non_vendor_voc);
 
 --delete from vendorownercollection where id in (select vocid from uhs_non_vendor_voc);
+
 --These are super slow due to a gajillion foreign keys. If there was any data in them we could delete them but there is no personal data in them
+--we'll try deleting these, but we can skip them if slow
+delete from role where id in (select primaryrepresentative_id from uhs_non_vendor);
+delete from role where id in (select secondaryrepresentative_id from uhs_non_vendor);
 
---delete from role where id in (select primaryrepresentative_id from uhs_non_vendor);
-
---delete from role where id in (select secondaryrepresentative_id from uhs_non_vendor);
 -- I am not going to put deleting of vendors in here because we really want to think hard about that before we do it in the future. If they have any other vendor connections, we shouldn't delete them. We don't want to delete them anyway, but in this case, we have to!
