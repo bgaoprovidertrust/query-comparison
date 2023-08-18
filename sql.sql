@@ -23,8 +23,8 @@ covgid = cov.vendorgroup_id,
 monitorservice_id = cov.monitorservice_id
 from clientownedvendor cov
 where cov.vendornumber = anv.vendornumber
-and cov.createtime > '2023-08-15' --TODO change back to 08-14
-and cov.createtime < '2023-08-18' --TODO change back to 08-16
+and cov.createtime > '2023-08-14'
+and cov.createtime < '2023-08-16'
  and cov.client_id = 1509; --UHS
 
 update uhs_non_vendor unv set
@@ -32,8 +32,8 @@ update uhs_non_vendor unv set
  from clientownedvendorgroup covg
  where unv.covgid = covg.id
 and covg.trashed
-and createtime > '2023-08-16' --TODO change back to 08-14
-and createtime < '2023-08-18' --TODO change back to 08-16
+and createtime > '2023-08-14'
+and createtime < '2023-08-16'
 and covg.client_id = 1509;
 
 insert into uhs_non_vendor_voc(vocid)
